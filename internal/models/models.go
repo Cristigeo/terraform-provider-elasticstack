@@ -215,13 +215,15 @@ type PutIndexParams struct {
 }
 
 type IndexAlias struct {
-	Name          string                 `json:"-"`
-	Filter        map[string]interface{} `json:"filter,omitempty"`
-	IndexRouting  string                 `json:"index_routing,omitempty"`
-	IsHidden      bool                   `json:"is_hidden,omitempty"`
-	IsWriteIndex  bool                   `json:"is_write_index,omitempty"`
-	Routing       string                 `json:"routing,omitempty"`
-	SearchRouting string                 `json:"search_routing,omitempty"`
+	Name             string                 `json:"-"`
+	Filter           map[string]interface{} `json:"filter,omitempty"`
+	IndexRouting     string                 `json:"index_routing,omitempty"`
+	IsHidden         bool                   `json:"is_hidden,omitempty"`
+	IsWriteIndex     bool                   `json:"is_write_index,omitempty"`
+	AllowRollover    bool                   `json:"-"`
+	RolloverDetected bool                   `json:"-"`
+	Routing          string                 `json:"routing,omitempty"`
+	SearchRouting    string                 `json:"search_routing,omitempty"`
 }
 
 type DataStream struct {

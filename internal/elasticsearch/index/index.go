@@ -464,6 +464,17 @@ func ResourceIndex() *schema.Resource {
 						Optional:    true,
 						Default:     false,
 					},
+					"allow_rollover": {
+						Description: "If true, allows the `is_write_index` value to be modified outside Terraform (by manual or automatic rollovers) without attempting to re-update it.",
+						Type:        schema.TypeBool,
+						Optional:    true,
+						Default:     false,
+					},
+					"rollover_detected": {
+						Description: "If true, the `is_write_index` property was modified outside terraform.",
+						Type:        schema.TypeBool,
+						Computed:    true,
+					},
 					"routing": {
 						Description: "Value used to route indexing and search operations to a specific shard.",
 						Type:        schema.TypeString,
@@ -828,7 +839,18 @@ func resourceIndexUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 		}
 
 		// keep new aliases up-to-date
-		for _, v := range enew {
+		for k, v := range enew {
+			// do not enforce 'is_write_index' if 'allow_rollover' is up and a rollover was detected
+			rolloverDetected := v.RolloverDetected
+			if old, ok := eold[k]; ok {
+				rolloverDetected = old.RolloverDetected
+			}
+
+			tflog.Warn(ctx, fmt.Sprintf("About to update index alias: AllowRollover [%v] and RolloverDetected [%v]", v.AllowRollover, rolloverDetected))
+			if v.AllowRollover && rolloverDetected {
+				tflog.Warn(ctx, "Ignoring is_write_index value because allow_rollover is up")
+				v.IsWriteIndex = false
+			}
 			if diags := elasticsearch.UpdateIndexAlias(ctx, client, indexName, &v); diags.HasError() {
 				return diags
 			}
@@ -924,8 +946,20 @@ func resourceIndexRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diags
 	}
 
+	tflog.Warn(ctx, fmt.Sprintf("resourceIndexRead called with resourceData.alias %v", d.Get("alias")))
+
 	if index.Aliases != nil {
-		aliases, diags := FlattenIndexAliases(index.Aliases)
+
+		var stateAliases map[string]models.IndexAlias = nil
+		if v, ok := d.GetOk("alias"); ok {
+			resAliases := v.(*schema.Set)
+			stateAliases, diags = ExpandIndexAliases(resAliases)
+			if diags.HasError() {
+				return diags
+			}
+		}
+
+		aliases, diags := FlattenIndexAliases(index.Aliases, stateAliases)
 		if diags.HasError() {
 			return diags
 		}

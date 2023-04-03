@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/elastic/terraform-provider-elasticstack/internal/models"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -40,17 +41,24 @@ func ExpandIndexAlias(alias map[string]interface{}) (*models.IndexAlias, diag.Di
 	ia.IndexRouting = alias["index_routing"].(string)
 	ia.IsHidden = alias["is_hidden"].(bool)
 	ia.IsWriteIndex = alias["is_write_index"].(bool)
+	ia.AllowRollover = alias["allow_rollover"].(bool)
+	ia.RolloverDetected = alias["rollover_detected"].(bool)
 	ia.Routing = alias["routing"].(string)
 	ia.SearchRouting = alias["search_routing"].(string)
 	return &ia, diags
 }
 
-func FlattenIndexAliases(aliases map[string]models.IndexAlias) (interface{}, diag.Diagnostics) {
+func FlattenIndexAliases(aliases map[string]models.IndexAlias, prevAliases map[string]models.IndexAlias) (interface{}, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	als := make([]interface{}, 0)
 	for k, v := range aliases {
-		alias, diags := FlattenIndexAlias(k, v)
+		var prevAlias *models.IndexAlias = nil
+		if pa, ok := prevAliases[k]; ok {
+			prevAlias = &pa
+		}
+
+		alias, diags := FlattenIndexAlias(k, v, prevAlias)
 		if diags.HasError() {
 			return nil, diags
 		}
@@ -59,7 +67,7 @@ func FlattenIndexAliases(aliases map[string]models.IndexAlias) (interface{}, dia
 	return als, diags
 }
 
-func FlattenIndexAlias(name string, alias models.IndexAlias) (interface{}, diag.Diagnostics) {
+func FlattenIndexAlias(name string, alias models.IndexAlias, prevAlias *models.IndexAlias) (interface{}, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	a := make(map[string]interface{})
 	a["name"] = name
@@ -75,8 +83,25 @@ func FlattenIndexAlias(name string, alias models.IndexAlias) (interface{}, diag.
 	a["index_routing"] = alias.IndexRouting
 	a["is_hidden"] = alias.IsHidden
 	a["is_write_index"] = alias.IsWriteIndex
+
+	fmt.Printf("FlattenIndexAlias: alias.IsWriteIndex [%v] and prevAlias.IsWriteIndex [%v]\n", alias.IsWriteIndex, prevAlias.IsWriteIndex)
+
+	if prevAlias != nil {
+		a["allow_rollover"] = prevAlias.AllowRollover
+		a["rollover_detected"] = alias.IsWriteIndex != prevAlias.IsWriteIndex
+		if prevAlias.AllowRollover {
+
+			a["is_write_index"] = prevAlias.IsWriteIndex // use previous value, ignore any drifting for `is_write_index`
+		}
+	} else {
+		a["allow_rollover"] = false
+		a["rollover_detected"] = false
+	}
+
 	a["routing"] = alias.Routing
 	a["search_routing"] = alias.SearchRouting
+
+	fmt.Printf("FlattenIndexAlias: rollover_detected [%v]\n", a["rollover_detected"])
 
 	return a, diags
 }

@@ -397,7 +397,7 @@ func flattenTemplateData(template *models.Template) ([]interface{}, diag.Diagnos
 	}
 
 	if template.Aliases != nil {
-		aliases, diags := FlattenIndexAliases(template.Aliases)
+		aliases, diags := FlattenIndexAliases(template.Aliases, make(map[string]models.IndexAlias))
 		if diags.HasError() {
 			return nil, diags
 		}
